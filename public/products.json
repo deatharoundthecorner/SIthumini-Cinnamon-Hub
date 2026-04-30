@@ -1,0 +1,82 @@
+[
+  {
+    "id": "9",
+    "name": "Cinnamon Sticks (100g)",
+    "description": "Premium whole cinnamon sticks, perfect for cooking, baking, or brewing aromatic teas. Naturally fragrant and rich in flavor.",
+    "price": "Rs. 1,000",
+    "category": "Spices",
+    "imageUrl": "/images/42.png"
+  },
+  {
+    "id": "10",
+    "name": "Cinnamon Tea Cut (100g)",
+    "description": "Finely cut cinnamon pieces, ideal for making cinnamon tea. Infuses a warm, sweet flavor and aroma.",
+    "price": "Rs. 800",
+    "category": "Tea & Infusions",
+    "imageUrl": "/images/clear 11.png"
+  },
+  {
+    "id": "11",
+    "name": "Cinnamon Powder (100g)",
+    "description": "High-quality ground cinnamon, perfect for cooking, baking, and seasoning. Adds a fragrant, warm touch to recipes.",
+    "price": "Rs. 700",
+    "category": "Spices",
+    "imageUrl": "/images/clear 14.png"
+  },
+  {
+    "id": "12",
+    "name": "Cinnamon Toothpicks (1 piece)",
+    "description": "Single cinnamon-infused toothpick. Freshens breath naturally while giving a subtle spicy aroma.",
+    "price": "Rs. 300",
+    "category": "Oral Care",
+    "imageUrl": "/images/clear 8.png"
+  },
+  {
+    "id": "13",
+    "name": "Dried Cinnamon Leaves (10 pieces)",
+    "description": "Dried cinnamon leaves for culinary use, teas, or herbal remedies. Provides a mild, aromatic flavor.",
+    "price": "Rs. 150",
+    "category": "Herbs & Leaves",
+    "imageUrl": "/images/cinnamonleaves.png"
+  },
+  {
+    "id": "14",
+    "name": "Dog Chewable Wood (2 pieces)",
+    "description": "Safe, natural chewable wood sticks for dogs. Helps maintain dental hygiene while keeping pets entertained.",
+    "price": "Rs. 200",
+    "category": "Pet Care",
+    "imageUrl": "/images/clear 12.png"
+  },
+  {
+    "id": "15",
+    "name": "Cinnamon Leaf Oil (10ml)",
+    "description": "Pure cinnamon leaf essential oil, perfect for aromatherapy, massage, and wellness applications.",
+    "price": "Rs. 375",
+    "category": "Essential Oils",
+    "imageUrl": "/images/clear 7.png"
+  },
+  {
+    "id": "16",
+    "name": "Large Cinnamon Soap",
+    "description": "Handmade large cinnamon soap bar with natural extracts. Leaves skin refreshed, clean, and lightly scented.",
+    "price": "Rs. 250",
+    "category": "Personal Care",
+    "imageUrl": "/images/soap.webp"
+  },
+  {
+    "id": "17",
+    "name": "Small Cinnamon Soap",
+    "description": "Compact cinnamon soap bar, ideal for travel or gifting. Gentle cleansing with a natural cinnamon aroma.",
+    "price": "Rs. 125",
+    "category": "Personal Care",
+    "imageUrl": "/images/37.png"
+  },
+  {
+    "id": "18",
+    "name": "Cinnamon Candle",
+    "description": "Hand-poured cinnamon-scented candle. Creates a warm, cozy, and fragrant ambiance in any space.",
+    "price": "Rs. 150",
+    "category": "Home Fragrance",
+    "imageUrl": "/images/candle.webp"
+  }
+]

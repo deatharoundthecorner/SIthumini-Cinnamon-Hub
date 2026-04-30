@@ -1,0 +1,21 @@
+{
+  "name": "Sithumini Cinnamon Hub",
+  "short_name": "Sithumini",
+  "description": "Premium cinnamon products from Sri Lanka including sticks, powders, candles, and wellness items.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#8B4513",
+  "icons": [
+    {
+      "src": "/images/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/images/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

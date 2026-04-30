@@ -1,0 +1,16 @@
+/* Cinnamon Hub custom styles */
+.bg-cinnamon-bg {
+  background-image: url('/images/cinnamonsticks.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0.2;
+  width: 100%;
+  height: 100%;
+}
+
+/* UI tweaks for product cards and admin */
+.group:hover { transform: translateY(-4px); }
+.rounded-3xl { border-radius: 18px; }
+.line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
