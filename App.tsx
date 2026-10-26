@@ -4,13 +4,14 @@ import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import Hero from './components/Hero';
 import About from './components/About';
+import ProductTray from './components/ProductTray';
 import ProductGrid from './components/ProductGrid';
 import WhyUs from './components/WhyUs';
 import Contact from './components/Contact';
 import Footer from './components/Footer';
 import { Product } from './types';
 import ProductModal from './components/ProductModal';
-import Cart, { CartItem, getNumericPrice } from './components/Cart';
+import Cart, { CartItem } from './components/Cart';
 import AdminPage from './components/AdminPage';
 import FloatingWhatsApp from './components/FloatingWhatsApp';
 
@@ -79,6 +80,9 @@ const App: React.FC = () => {
   }, [cartItems]);
 
   const handleAddToCart = (product: Product) => {
+    // If product is explicitly out of stock, do not add
+    if (product.stock === 0) return;
+
     setCartItems(prev => {
       const found = prev.find(p => p.product.id === product.id);
       if (found) {
@@ -104,25 +108,6 @@ const App: React.FC = () => {
 
   const handleClearCart = () => {
     setCartItems([]);
-  };
-
-  const handleCheckout = () => {
-    if (typeof window === 'undefined' || cartItems.length === 0) return;
-
-    const lines = cartItems.map(
-      (item, idx) => `${idx + 1}. ${item.product.name} (x${item.qty}) — ${item.product.price}`
-    ).join('\n');
-
-    const subtotal = cartItems.reduce((sum, item) => {
-      const price = getNumericPrice(item.product);
-      return sum + price * item.qty;
-    }, 0);
-
-    const message = encodeURIComponent(
-      `Hello Sithumini Cinnamon Hub!\nI would like to place an order from your website:\n\n${lines}\n\nEstimated Total: Rs. ${subtotal.toLocaleString()}\n\nPlease confirm availability and delivery details.`
-    );
-
-    window.open(`https://wa.me/94785197533?text=${message}`, '_blank');
   };
 
   const handleApplyProducts = (newProducts: Product[]) => {
@@ -169,17 +154,29 @@ const App: React.FC = () => {
                       Discover the richness of authentic Sri Lankan cinnamon through our carefully curated range of spices, home goods, and pet care.
                     </p>
                   </div>
+
                   {loading ? (
                     <div className="flex justify-center py-20">
                       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#8B4513]"></div>
                     </div>
                   ) : (
-                    <ProductGrid
-                      products={products}
-                      searchQuery={searchQuery}
-                      onAddToCart={handleAddToCart}
-                      onOpenModal={(p) => setModalProduct(p)}
-                    />
+                    <>
+                      {/* Product Trays for Curated Collections */}
+                      <ProductTray
+                        products={products}
+                        onAddToCart={handleAddToCart}
+                        onOpenModal={(p) => setModalProduct(p)}
+                      />
+
+                      {/* Full Catalog with Category Pills & Sorting */}
+                      <ProductGrid
+                        products={products}
+                        searchQuery={searchQuery}
+                        onAddToCart={handleAddToCart}
+                        onOpenModal={(p) => setModalProduct(p)}
+                        onClearSearch={() => setSearchQuery('')}
+                      />
+                    </>
                   )}
 
                   <ProductModal
@@ -201,14 +198,13 @@ const App: React.FC = () => {
             </main>
             <Footer />
 
-            {/* Slide-out Cart Drawer */}
+            {/* Slide-out Cart Drawer with Structured WhatsApp Checkout */}
             <Cart
               isOpen={isCartOpen}
               onClose={() => setIsCartOpen(false)}
               items={cartItems}
               onRemove={handleRemove}
               onChangeQty={handleChangeQty}
-              onCheckout={handleCheckout}
               onClearCart={handleClearCart}
             />
 
