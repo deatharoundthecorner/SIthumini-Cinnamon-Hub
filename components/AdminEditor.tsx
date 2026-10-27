@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Product } from '../types';
+import { getNumericPrice, parsePriceString, formatPrice } from '../utils/pricing';
 
 interface Props {
   products: Product[];
@@ -19,16 +20,16 @@ const AdminEditor: React.FC<Props> = ({ products, onApply }) => {
     });
   }, [draftProducts, searchQuery]);
 
-  const totalPrice = useMemo(() => draftProducts.reduce((sum, product) => sum + (product.priceValue || 0), 0), [draftProducts]);
+  const totalPrice = useMemo(() => draftProducts.reduce((sum, product) => sum + getNumericPrice(product), 0), [draftProducts]);
 
   const updatePrice = (id: string, priceText: string) => {
-    const numeric = Number(priceText.replace(/[^0-9]/g, ''));
+    const numeric = parsePriceString(priceText);
     setDraftProducts(prev => prev.map(product => {
       if (product.id !== id) return product;
       return {
         ...product,
-        price: priceText || product.price,
-        priceValue: Number.isFinite(numeric) ? numeric : product.priceValue,
+        price: priceText,
+        priceValue: numeric > 0 ? numeric : product.priceValue,
       };
     }));
   };
@@ -70,7 +71,7 @@ const AdminEditor: React.FC<Props> = ({ products, onApply }) => {
           <h4 className="font-bold text-lg">Quick Price Editor</h4>
           <p className="text-sm text-gray-500">Only change the price field here. Other item details stay fixed.</p>
         </div>
-        <div className="text-sm text-gray-500">Total base price: Rs. {totalPrice.toLocaleString()}</div>
+        <div className="text-sm text-gray-500">Total base price: {formatPrice(totalPrice)}</div>
       </div>
 
       <div className="mb-4">
