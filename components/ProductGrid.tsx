@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Product } from '../types';
 import { ArrowUpRight, SearchX, SlidersHorizontal, X, Plus } from 'lucide-react';
-import { getNumericPrice } from './Cart';
+import { getNumericPrice, formatPrice } from './Cart';
 
 interface Props {
   products: Product[];
@@ -216,7 +216,7 @@ const ProductGrid: React.FC<Props> = ({
                   <div className="mt-auto flex items-center justify-between border-t border-gray-50 pt-4">
                     <div>
                       <span className="text-lg font-bold text-[#4A3728]">
-                        {product.price || `Rs. ${numericPrice.toLocaleString()}`}
+                        {formatPrice(numericPrice)}
                       </span>
                     </div>
 

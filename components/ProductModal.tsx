@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { Product } from '../types';
 import { X, Plus, MessageCircle } from 'lucide-react';
-import { getNumericPrice } from './Cart';
+import { getNumericPrice, formatPrice } from './Cart';
 
 interface Props {
   product: Product | null;
@@ -29,7 +29,7 @@ const ProductModal: React.FC<Props> = ({ product, onClose, onAddToCart }) => {
   const openWhatsAppInquiry = () => {
     if (typeof window === 'undefined') return;
     const message = encodeURIComponent(
-      `Hello Sithumini Cinnamon Hub! I am inquiring about "${product.name}" (${product.price || `Rs. ${numericPrice}`}). Could you confirm availability?`
+      `Hello Sithumini Cinnamon Hub! I am inquiring about "${product.name}" (${formatPrice(numericPrice)}). Could you confirm availability?`
     );
     window.open(`https://wa.me/94785197533?text=${message}`, '_blank');
   };
@@ -95,7 +95,7 @@ const ProductModal: React.FC<Props> = ({ product, onClose, onAddToCart }) => {
           <div className="pt-6 border-t border-gray-100">
             <div className="mb-4">
               <span className="text-2xl font-bold text-[#8B4513]">
-                {product.price || `Rs. ${numericPrice.toLocaleString()}`}
+                {formatPrice(numericPrice)}
               </span>
               <p className="text-xs text-gray-400 mt-0.5">
                 Authentic Ceylon single-origin harvest
@@ -120,10 +120,10 @@ const ProductModal: React.FC<Props> = ({ product, onClose, onAddToCart }) => {
               <button
                 type="button"
                 onClick={openWhatsAppInquiry}
+                className="inline-flex items-center justify-center gap-1.5 py-3 px-4 rounded-xl text-sm font-bold bg-[#FAF9F6] border border-[#8B4513]/20 text-[#4A3728] hover:bg-[#8B4513]/10 transition-colors"
                 title="Ask question on WhatsApp"
-                className="inline-flex items-center justify-center gap-1.5 py-3 px-4 rounded-xl text-sm font-semibold border border-[#8B4513]/20 hover:bg-[#8B4513]/5 text-[#4A3728] transition-colors"
               >
-                <MessageCircle size={16} className="text-[#25D366]" />
+                <MessageCircle size={16} className="text-emerald-600" />
                 <span>Inquire</span>
               </button>
             </div>

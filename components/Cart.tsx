@@ -14,6 +14,13 @@ import {
   AlertCircle,
   FileText,
 } from 'lucide-react';
+import {
+  getNumericPrice,
+  formatPrice,
+  parsePriceString,
+  calculateLineTotal,
+  calculateSubtotal,
+} from '../utils/pricing';
 
 export interface CartItem {
   product: Product;
@@ -30,13 +37,8 @@ interface CartProps {
   onClearCart?: () => void;
 }
 
-export const getNumericPrice = (product: Product): number => {
-  if (typeof product.priceValue === 'number' && !isNaN(product.priceValue)) {
-    return product.priceValue;
-  }
-  const extracted = Number(String(product.price || '').replace(/[^0-9.]/g, ''));
-  return isNaN(extracted) ? 0 : extracted;
-};
+// Re-export pricing helpers for backward compatibility across components
+export { getNumericPrice, formatPrice, parsePriceString, calculateLineTotal, calculateSubtotal };
 
 const Cart: React.FC<CartProps> = ({
   isOpen,
@@ -78,10 +80,7 @@ const Cart: React.FC<CartProps> = ({
 
   const totalItemCount = items.reduce((sum, item) => sum + item.qty, 0);
 
-  const subtotal = items.reduce((sum, item) => {
-    const unitPrice = getNumericPrice(item.product);
-    return sum + unitPrice * item.qty;
-  }, 0);
+  const subtotal = calculateSubtotal(items);
 
   // Check if any cart item is out of stock (stock === 0)
   const hasOutOfStockItem = items.some((item) => item.product.stock === 0);
@@ -101,8 +100,8 @@ const Cart: React.FC<CartProps> = ({
     const itemLines = items
       .map((item, index) => {
         const unit = getNumericPrice(item.product);
-        const lineTotal = unit * item.qty;
-        return `${index + 1}. ${item.product.name}\n   Qty: ${item.qty} | Unit: Rs. ${unit.toLocaleString()} | Line: Rs. ${lineTotal.toLocaleString()}`;
+        const lineTotal = calculateLineTotal(item.product, item.qty);
+        return `${index + 1}. ${item.product.name}\n   Qty: ${item.qty} | Unit: ${formatPrice(unit)} | Line: ${formatPrice(lineTotal)}`;
       })
       .join('\n');
 
@@ -127,7 +126,7 @@ const Cart: React.FC<CartProps> = ({
       customerSection +
       `\n📦 Requested Products:\n` +
       `${itemLines}\n\n` +
-      `📊 Estimated Subtotal: Rs. ${subtotal.toLocaleString()}\n` +
+      `📊 Estimated Subtotal: ${formatPrice(subtotal)}\n` +
       `🚚 Delivery Fees: To be confirmed based on delivery destination.\n\n` +
       `⚠️ Note: This is an order request. Please confirm product availability and total delivery costs before final confirmation.`;
 
@@ -224,7 +223,7 @@ const Cart: React.FC<CartProps> = ({
                 {/* List of items */}
                 {items.map((item) => {
                   const itemPrice = getNumericPrice(item.product);
-                  const lineTotal = itemPrice * item.qty;
+                  const lineTotal = calculateLineTotal(item.product, item.qty);
                   const isItemOutOfStock = item.product.stock === 0;
 
                   return (
@@ -315,11 +314,11 @@ const Cart: React.FC<CartProps> = ({
                           {/* Line Total */}
                           <div className="text-right">
                             <div className="text-sm font-bold text-[#8B4513]">
-                              Rs. {lineTotal.toLocaleString()}
+                              {formatPrice(lineTotal)}
                             </div>
                             {item.qty > 1 && (
                               <div className="text-[10px] text-gray-400">
-                                Rs. {itemPrice.toLocaleString()} each
+                                {formatPrice(itemPrice)} each
                               </div>
                             )}
                           </div>
@@ -418,11 +417,11 @@ const Cart: React.FC<CartProps> = ({
               <div className="space-y-1 pt-1">
                 <div className="flex justify-between text-xs text-gray-500">
                   <span>Subtotal ({totalItemCount} items)</span>
-                  <span>Rs. {subtotal.toLocaleString()}</span>
+                  <span>{formatPrice(subtotal)}</span>
                 </div>
                 <div className="flex justify-between text-base font-bold text-[#4A3728]">
                   <span>Estimated Total</span>
-                  <span className="text-[#8B4513] text-lg">Rs. {subtotal.toLocaleString()}</span>
+                  <span className="text-[#8B4513] text-lg">{formatPrice(subtotal)}</span>
                 </div>
               </div>
 

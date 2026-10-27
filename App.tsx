@@ -14,6 +14,21 @@ import ProductModal from './components/ProductModal';
 import Cart, { CartItem } from './components/Cart';
 import AdminPage from './components/AdminPage';
 import FloatingWhatsApp from './components/FloatingWhatsApp';
+import { getNumericPrice, formatPrice } from './utils/pricing';
+
+const sanitizeProduct = (p: Product): Product => {
+  const numeric = getNumericPrice(p);
+  return {
+    ...p,
+    priceValue: numeric,
+    price: formatPrice(numeric),
+  };
+};
+
+const sanitizeProducts = (list: unknown): Product[] => {
+  if (!Array.isArray(list)) return [];
+  return list.map((item) => sanitizeProduct(item as Product));
+};
 
 const App: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -29,9 +44,12 @@ const App: React.FC = () => {
       try {
         const saved = localStorage.getItem('productsOverride');
         if (saved) {
-          setProducts(JSON.parse(saved));
-          setLoading(false);
-          return;
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setProducts(sanitizeProducts(parsed));
+            setLoading(false);
+            return;
+          }
         }
 
         // try server API first (if running)
@@ -39,9 +57,11 @@ const App: React.FC = () => {
           const apiRes = await fetch('/api/products');
           if (apiRes.ok) {
             const data = await apiRes.json();
-            setProducts(data);
-            setLoading(false);
-            return;
+            if (Array.isArray(data) && data.length > 0) {
+              setProducts(sanitizeProducts(data));
+              setLoading(false);
+              return;
+            }
           }
         } catch (e) {
           // ignore and fallback to bundled file
@@ -49,7 +69,7 @@ const App: React.FC = () => {
 
         const response = await fetch('./products.json');
         const data = await response.json();
-        setProducts(data);
+        setProducts(sanitizeProducts(data));
       } catch (error) {
         console.error('Error loading products:', error);
       } finally {
@@ -61,10 +81,19 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    // hydrate cart from localStorage
+    // hydrate cart from localStorage and repair any stale corrupted item prices
     try {
       const raw = localStorage.getItem('cart');
-      if (raw) setCartItems(JSON.parse(raw));
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          const repaired = parsed.map((item: any) => ({
+            ...item,
+            product: sanitizeProduct(item.product),
+          }));
+          setCartItems(repaired);
+        }
+      }
     } catch (e) { /* ignore */ }
   }, []);
 
@@ -83,12 +112,14 @@ const App: React.FC = () => {
     // If product is explicitly out of stock, do not add
     if (product.stock === 0) return;
 
+    const sanitized = sanitizeProduct(product);
+
     setCartItems(prev => {
-      const found = prev.find(p => p.product.id === product.id);
+      const found = prev.find(p => p.product.id === sanitized.id);
       if (found) {
-        return prev.map(p => p.product.id === product.id ? { ...p, qty: p.qty + 1 } : p);
+        return prev.map(p => p.product.id === sanitized.id ? { ...p, qty: p.qty + 1 } : p);
       }
-      return [{ product, qty: 1 }, ...prev];
+      return [{ product: sanitized, qty: 1 }, ...prev];
     });
     // Open cart drawer immediately to provide feedback
     setIsCartOpen(true);
@@ -111,9 +142,10 @@ const App: React.FC = () => {
   };
 
   const handleApplyProducts = (newProducts: Product[]) => {
-    setProducts(newProducts);
+    const sanitized = sanitizeProducts(newProducts);
+    setProducts(sanitized);
     try {
-      localStorage.setItem('productsOverride', JSON.stringify(newProducts));
+      localStorage.setItem('productsOverride', JSON.stringify(sanitized));
     } catch (e) {
       console.warn('Could not save products override', e);
     }

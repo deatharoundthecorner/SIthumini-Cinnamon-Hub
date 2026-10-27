@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { Product } from '../types';
 import { ChevronLeft, ChevronRight, Plus, Eye, Sparkles, Leaf } from 'lucide-react';
-import { getNumericPrice } from './Cart';
+import { getNumericPrice, formatPrice } from './Cart';
 
 interface ProductTrayProps {
   products: Product[];
@@ -25,14 +25,14 @@ const COLLECTIONS: CollectionConfig[] = [
     title: 'Cinnamon Essentials',
     subtitle: 'Pure Ceylon quills, triple-milled powders, teas, and aromatic leaves',
     icon: <Leaf size={16} className="text-[#8B4513]" />,
-    categories: ['Spices', 'Leaves & Raw'],
+    categories: ['Spices', 'Leaves & Raw', 'Tea & Infusions', 'Herbs & Leaves'],
   },
   {
     id: 'natural-living',
     title: 'Natural Living & Wellness',
     subtitle: 'Handcrafted soaps, slow-burn candles, toothpicks, and essential oils',
     icon: <Sparkles size={16} className="text-[#8B4513]" />,
-    categories: ['Home & Wellness', 'Essential Oils', 'Pet Care'],
+    categories: ['Home & Wellness', 'Essential Oils', 'Pet Care', 'Personal Care', 'Oral Care', 'Home Fragrance'],
   },
 ];
 
@@ -200,7 +200,7 @@ const ProductTray: React.FC<ProductTrayProps> = ({
                 <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
                   <div>
                     <span className="text-base font-bold text-[#4A3728]">
-                      {product.price || `Rs. ${numericPrice.toLocaleString()}`}
+                      {formatPrice(numericPrice)}
                     </span>
                   </div>
 
