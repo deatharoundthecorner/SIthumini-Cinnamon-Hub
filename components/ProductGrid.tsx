@@ -1,11 +1,12 @@
 import React, { useState, useMemo } from 'react';
-import { Product } from '../types';
-import { ArrowUpRight, SearchX, SlidersHorizontal, X, Plus } from 'lucide-react';
+import { Product, Market } from '../types';
+import { ArrowUpRight, SearchX, SlidersHorizontal, X, Plus, MessageCircle } from 'lucide-react';
 import { getNumericPrice, formatPrice } from './Cart';
 
 interface Props {
   products: Product[];
   searchQuery: string;
+  market?: Market;
   onAddToCart: (product: Product) => void;
   onOpenModal: (product: Product) => void;
   onClearSearch?: () => void;
@@ -14,6 +15,7 @@ interface Props {
 const ProductGrid: React.FC<Props> = ({
   products = [],
   searchQuery = '',
+  market = 'lk',
   onAddToCart,
   onOpenModal,
   onClearSearch,
@@ -44,16 +46,30 @@ const ProductGrid: React.FC<Props> = ({
     });
   }, [products, filter, searchQuery]);
 
-  // Sort products
+  // Sort products safely handling nulls in international market
   const sorted = useMemo(() => {
     if (sort === 'price-asc') {
-      return [...filtered].sort((a, b) => getNumericPrice(a) - getNumericPrice(b));
+      return [...filtered].sort((a, b) => {
+        const pa = getNumericPrice(a, market);
+        const pb = getNumericPrice(b, market);
+        if (pa === null && pb === null) return 0;
+        if (pa === null) return 1;
+        if (pb === null) return -1;
+        return pa - pb;
+      });
     }
     if (sort === 'price-desc') {
-      return [...filtered].sort((a, b) => getNumericPrice(b) - getNumericPrice(a));
+      return [...filtered].sort((a, b) => {
+        const pa = getNumericPrice(a, market);
+        const pb = getNumericPrice(b, market);
+        if (pa === null && pb === null) return 0;
+        if (pa === null) return 1;
+        if (pb === null) return -1;
+        return pb - pa;
+      });
     }
     return filtered;
-  }, [filtered, sort]);
+  }, [filtered, sort, market]);
 
   const hasActiveFilters = filter !== 'All' || searchQuery.trim().length > 0 || sort !== 'none';
 
@@ -65,8 +81,11 @@ const ProductGrid: React.FC<Props> = ({
 
   const openWhatsAppInquiry = (productName: string) => {
     if (typeof window === 'undefined') return;
+    const isIntl = market === 'intl';
     const message = encodeURIComponent(
-      `Hello Sithumini Cinnamon Hub! I am interested in inquiring about "${productName}". Could you provide more details on availability?`
+      isIntl
+        ? `Hello Sithumini Cinnamon Hub! I am an international buyer inquiring about export pricing, MOQ, and international shipping for "${productName}". Could you provide export rates?`
+        : `Hello Sithumini Cinnamon Hub! I am interested in inquiring about "${productName}". Could you provide more details on availability?`
     );
     window.open(`https://wa.me/94785197533?text=${message}`, '_blank');
   };
@@ -75,7 +94,6 @@ const ProductGrid: React.FC<Props> = ({
     <div>
       {/* Category Pills & Sort Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-sm">
-        
         {/* Category Pills */}
         <div className="flex items-center gap-2 overflow-x-auto cart-scroll pb-1 -mx-1 px-1">
           {categories.map((cat) => {
@@ -144,7 +162,9 @@ const ProductGrid: React.FC<Props> = ({
           {sorted.map((product: Product) => {
             const isOutOfStock = product.stock === 0;
             const hasExplicitStock = typeof product.stock === 'number';
-            const numericPrice = getNumericPrice(product);
+            const numericPrice = getNumericPrice(product, market);
+            const isConfigured = numericPrice !== null && numericPrice > 0;
+            const isIntlUnpriced = market === 'intl' && !isConfigured;
 
             return (
               <div
@@ -187,7 +207,11 @@ const ProductGrid: React.FC<Props> = ({
 
                   {/* Direct WhatsApp Quick Contact button */}
                   <button
-                    title="Inquire about this product on WhatsApp"
+                    title={
+                      market === 'intl'
+                        ? 'Inquire about export pricing and bulk orders'
+                        : 'Inquire about this product on WhatsApp'
+                    }
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
@@ -214,13 +238,19 @@ const ProductGrid: React.FC<Props> = ({
                   </div>
 
                   <div className="mt-auto flex items-center justify-between border-t border-gray-50 pt-4">
-                    <div>
-                      <span className="text-lg font-bold text-[#4A3728]">
-                        {formatPrice(numericPrice)}
-                      </span>
+                    <div className="min-w-0 flex-1 mr-2">
+                      {isIntlUnpriced ? (
+                        <span className="inline-block text-xs font-bold text-amber-800 bg-amber-50 px-2 py-1 rounded-md border border-amber-200/80">
+                          Request export pricing
+                        </span>
+                      ) : (
+                        <span className="text-lg font-bold text-[#4A3728]">
+                          {formatPrice(numericPrice, market)}
+                        </span>
+                      )}
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-shrink-0">
                       <button
                         type="button"
                         onClick={() => onOpenModal(product)}
@@ -229,19 +259,31 @@ const ProductGrid: React.FC<Props> = ({
                         Details
                       </button>
 
-                      <button
-                        type="button"
-                        disabled={isOutOfStock}
-                        onClick={() => onAddToCart(product)}
-                        className={`inline-flex items-center gap-1 text-xs font-bold px-3.5 py-1.5 rounded-lg transition-all shadow-sm ${
-                          isOutOfStock
-                            ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
-                            : 'bg-[#8B4513] hover:bg-[#6D360F] text-white active:scale-95'
-                        }`}
-                      >
-                        <Plus size={13} />
-                        <span>{isOutOfStock ? 'Sold Out' : 'Add'}</span>
-                      </button>
+                      {isIntlUnpriced ? (
+                        <button
+                          type="button"
+                          onClick={() => openWhatsAppInquiry(product.name)}
+                          className="inline-flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-lg bg-amber-700 hover:bg-amber-800 text-white transition-all shadow-sm active:scale-95"
+                          title="Inquire about export price"
+                        >
+                          <MessageCircle size={13} />
+                          <span>Quote</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={isOutOfStock}
+                          onClick={() => onAddToCart(product)}
+                          className={`inline-flex items-center gap-1 text-xs font-bold px-3.5 py-1.5 rounded-lg transition-all shadow-sm ${
+                            isOutOfStock
+                              ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
+                              : 'bg-[#8B4513] hover:bg-[#6D360F] text-white active:scale-95'
+                          }`}
+                        >
+                          <Plus size={13} />
+                          <span>{isOutOfStock ? 'Sold Out' : 'Add'}</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

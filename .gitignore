@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Cloudflare Workers
+.wrangler
+.dev.vars
+
+# Local extraneous folder clone
+SIthumini-Cinnamon-Hub-/

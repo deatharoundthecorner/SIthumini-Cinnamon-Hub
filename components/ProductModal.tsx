@@ -1,15 +1,21 @@
 import React, { useEffect } from 'react';
-import { Product } from '../types';
+import { Product, Market } from '../types';
 import { X, Plus, MessageCircle } from 'lucide-react';
 import { getNumericPrice, formatPrice } from './Cart';
 
 interface Props {
   product: Product | null;
+  market?: Market;
   onClose: () => void;
   onAddToCart: (product: Product) => void;
 }
 
-const ProductModal: React.FC<Props> = ({ product, onClose, onAddToCart }) => {
+const ProductModal: React.FC<Props> = ({
+  product,
+  market = 'lk',
+  onClose,
+  onAddToCart,
+}) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && product) {
@@ -24,12 +30,17 @@ const ProductModal: React.FC<Props> = ({ product, onClose, onAddToCart }) => {
 
   const isOutOfStock = product.stock === 0;
   const hasExplicitStock = typeof product.stock === 'number';
-  const numericPrice = getNumericPrice(product);
+  const numericPrice = getNumericPrice(product, market);
+  const isConfigured = numericPrice !== null && numericPrice > 0;
+  const isIntlUnpriced = market === 'intl' && !isConfigured;
 
   const openWhatsAppInquiry = () => {
     if (typeof window === 'undefined') return;
+    const isIntl = market === 'intl';
     const message = encodeURIComponent(
-      `Hello Sithumini Cinnamon Hub! I am inquiring about "${product.name}" (${formatPrice(numericPrice)}). Could you confirm availability?`
+      isIntl
+        ? `Hello Sithumini Cinnamon Hub! I am an international buyer inquiring about export pricing, certificates, and delivery costs for "${product.name}". Could you provide export rates?`
+        : `Hello Sithumini Cinnamon Hub! I am inquiring about "${product.name}" (${formatPrice(numericPrice, market)}). Could you confirm availability?`
     );
     window.open(`https://wa.me/94785197533?text=${message}`, '_blank');
   };
@@ -94,38 +105,66 @@ const ProductModal: React.FC<Props> = ({ product, onClose, onAddToCart }) => {
 
           <div className="pt-6 border-t border-gray-100">
             <div className="mb-4">
-              <span className="text-2xl font-bold text-[#8B4513]">
-                {formatPrice(numericPrice)}
-              </span>
-              <p className="text-xs text-gray-400 mt-0.5">
-                Authentic Ceylon single-origin harvest
-              </p>
+              {isIntlUnpriced ? (
+                <div>
+                  <span className="text-xl font-bold text-amber-800">
+                    Request export pricing
+                  </span>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Export price depends on destination, shipment volume, and phytosanitary certificate.
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <span className="text-2xl font-bold text-[#8B4513]">
+                    {formatPrice(numericPrice, market)}
+                  </span>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    {market === 'intl'
+                      ? 'Authoritative export rate (USD) — shipping calculated on order'
+                      : 'Authentic Ceylon single-origin harvest'}
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="flex flex-col sm:flex-row gap-2">
-              <button
-                type="button"
-                disabled={isOutOfStock}
-                onClick={() => onAddToCart(product)}
-                className={`flex-1 inline-flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-bold transition-all shadow-md ${
-                  isOutOfStock
-                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
-                    : 'bg-[#8B4513] hover:bg-[#6D360F] text-white'
-                }`}
-              >
-                <Plus size={16} />
-                <span>{isOutOfStock ? 'Out of Stock' : 'Add to Cart'}</span>
-              </button>
+              {isIntlUnpriced ? (
+                <button
+                  type="button"
+                  onClick={openWhatsAppInquiry}
+                  className="w-full inline-flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-bold bg-[#25D366] hover:bg-[#20ba59] text-white shadow-md transition-all"
+                >
+                  <MessageCircle size={17} />
+                  <span>Request Export Quote on WhatsApp</span>
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    disabled={isOutOfStock}
+                    onClick={() => onAddToCart(product)}
+                    className={`flex-1 inline-flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-bold transition-all shadow-md ${
+                      isOutOfStock
+                        ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
+                        : 'bg-[#8B4513] hover:bg-[#6D360F] text-white'
+                    }`}
+                  >
+                    <Plus size={16} />
+                    <span>{isOutOfStock ? 'Out of Stock' : 'Add to Cart'}</span>
+                  </button>
 
-              <button
-                type="button"
-                onClick={openWhatsAppInquiry}
-                className="inline-flex items-center justify-center gap-1.5 py-3 px-4 rounded-xl text-sm font-bold bg-[#FAF9F6] border border-[#8B4513]/20 text-[#4A3728] hover:bg-[#8B4513]/10 transition-colors"
-                title="Ask question on WhatsApp"
-              >
-                <MessageCircle size={16} className="text-emerald-600" />
-                <span>Inquire</span>
-              </button>
+                  <button
+                    type="button"
+                    onClick={openWhatsAppInquiry}
+                    className="inline-flex items-center justify-center gap-1.5 py-3 px-4 rounded-xl text-sm font-bold bg-[#FAF9F6] border border-[#8B4513]/20 text-[#4A3728] hover:bg-[#8B4513]/10 transition-colors"
+                    title="Ask question on WhatsApp"
+                  >
+                    <MessageCircle size={16} className="text-emerald-600" />
+                    <span>Inquire</span>
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

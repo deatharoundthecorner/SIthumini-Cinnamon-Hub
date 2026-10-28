@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, X, Phone, Search, ShoppingBag } from 'lucide-react';
+import { Search, ShoppingBag, Menu, X, Phone, Globe } from 'lucide-react';
+import { Market } from '../types';
 
 interface HeaderProps {
   searchQuery: string;
   setSearchQuery: (query: string) => void;
-  cartCount?: number;
+  cartCount: number;
   onOpenCart?: () => void;
+  market?: Market;
+  onSelectMarket?: (market: Market) => void;
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -13,21 +16,25 @@ const Header: React.FC<HeaderProps> = ({
   setSearchQuery,
   cartCount = 0,
   onOpenCart,
+  market = 'lk',
+  onSelectMarket = () => {},
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 20);
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 20);
+    };
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
   const navLinks = [
     { name: 'Home', href: '#home' },
-    { name: 'About', href: '#about' },
+    { name: 'About Us', href: '#about' },
     { name: 'Products', href: '#products' },
-    { name: 'Why Us', href: '#why-us' },
+    { name: 'Why Ceylon?', href: '#why-us' },
     { name: 'Contact', href: '#contact' },
   ];
 
@@ -37,7 +44,7 @@ const Header: React.FC<HeaderProps> = ({
 
   return (
     <nav
-      className={`fixed w-full z-40 transition-all duration-300 ${
+      className={`fixed top-0 left-0 right-0 z-40 transition-all duration-300 ${
         scrolled
           ? 'bg-white/95 backdrop-blur-md border-b border-[#8B4513]/10 py-3 shadow-sm'
           : 'bg-[#FAF9F6]/90 backdrop-blur-sm py-4 border-b border-[#8B4513]/5'
@@ -92,8 +99,8 @@ const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Navigation Links + Cart + WhatsApp (Desktop) */}
-          <div className="hidden md:flex items-center space-x-2">
+          {/* Navigation Links + Market Selector + Cart + WhatsApp (Desktop) */}
+          <div className="hidden md:flex items-center space-x-3">
             <div className="flex items-center space-x-1">
               {navLinks.map((link) => (
                 <a
@@ -104,6 +111,38 @@ const Header: React.FC<HeaderProps> = ({
                   {link.name}
                 </a>
               ))}
+            </div>
+
+            <div className="w-px h-6 bg-gray-200 mx-1" />
+
+            {/* Market / Currency Selector (Desktop) */}
+            <div className="inline-flex items-center bg-[#FAF9F6] p-1 rounded-full border border-[#8B4513]/20 text-xs font-semibold shadow-inner">
+              <button
+                type="button"
+                onClick={() => onSelectMarket('lk')}
+                className={`flex items-center gap-1 px-3 py-1 rounded-full transition-all ${
+                  market === 'lk'
+                    ? 'bg-[#8B4513] text-white shadow-xs font-bold'
+                    : 'text-[#4A3728] hover:text-[#8B4513]'
+                }`}
+                title="Sri Lanka local pricing (LKR - Rs.)"
+              >
+                <span>🇱🇰</span>
+                <span>LKR</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onSelectMarket('intl')}
+                className={`flex items-center gap-1 px-3 py-1 rounded-full transition-all ${
+                  market === 'intl'
+                    ? 'bg-[#8B4513] text-white shadow-xs font-bold'
+                    : 'text-[#4A3728] hover:text-[#8B4513]'
+                }`}
+                title="International export pricing (USD - $)"
+              >
+                <Globe size={12} />
+                <span>Export (USD)</span>
+              </button>
             </div>
 
             <div className="w-px h-6 bg-gray-200 mx-1" />
@@ -135,8 +174,28 @@ const Header: React.FC<HeaderProps> = ({
             </a>
           </div>
 
-          {/* Mobile Actions: Cart Trigger + Mobile Menu Button */}
+          {/* Mobile Actions: Market Pill + Cart Trigger + Mobile Menu Button */}
           <div className="md:hidden flex items-center gap-1.5">
+            {/* Quick Market Switcher on Mobile Top Bar */}
+            <button
+              type="button"
+              onClick={() => onSelectMarket(market === 'lk' ? 'intl' : 'lk')}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border border-[#8B4513]/25 bg-white text-[#4A3728] shadow-xs active:scale-95 transition-all"
+              title={`Currently viewing ${market === 'lk' ? 'Sri Lanka (LKR)' : 'International (USD)'}. Tap to switch.`}
+            >
+              {market === 'lk' ? (
+                <>
+                  <span>🇱🇰</span>
+                  <span className="text-[#8B4513]">LKR</span>
+                </>
+              ) : (
+                <>
+                  <Globe size={12} className="text-[#8B4513]" />
+                  <span className="text-[#8B4513]">USD</span>
+                </>
+              )}
+            </button>
+
             {/* Mobile Cart Trigger */}
             <button
               onClick={onOpenCart}
@@ -179,6 +238,45 @@ const Header: React.FC<HeaderProps> = ({
                 placeholder="Search products..."
                 className="block w-full bg-gray-50 border border-gray-200 rounded-xl py-3 pl-10 pr-4 text-sm text-[#4A3728] focus:outline-none focus:ring-2 focus:ring-[#8B4513]/20"
               />
+            </div>
+
+            {/* Mobile Market Selector Card */}
+            <div className="p-3.5 bg-[#FAF9F6] rounded-2xl border border-[#8B4513]/15 space-y-2">
+              <div className="flex items-center justify-between text-xs font-bold text-[#4A3728]">
+                <span className="flex items-center gap-1.5">
+                  <Globe size={14} className="text-[#8B4513]" />
+                  <span>Delivery Region & Currency:</span>
+                </span>
+                <span className="text-[10px] text-gray-500 uppercase tracking-wider">
+                  {market === 'intl' ? 'USD Export' : 'LKR Local'}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => onSelectMarket('lk')}
+                  className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 border transition-all ${
+                    market === 'lk'
+                      ? 'bg-[#8B4513] text-white border-[#8B4513] shadow-sm'
+                      : 'bg-white text-[#4A3728] border-gray-200'
+                  }`}
+                >
+                  <span>🇱🇰</span>
+                  <span>Sri Lanka (Rs.)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onSelectMarket('intl')}
+                  className={`py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 border transition-all ${
+                    market === 'intl'
+                      ? 'bg-[#8B4513] text-white border-[#8B4513] shadow-sm'
+                      : 'bg-white text-[#4A3728] border-gray-200'
+                  }`}
+                >
+                  <Globe size={13} />
+                  <span>International ($)</span>
+                </button>
+              </div>
             </div>
 
             {/* Navigation links */}

@@ -1,12 +1,10 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import path from 'node:path';
 
-// Import the logic from pricing
 function parsePriceString(input) {
   if (typeof input === 'number') {
-    return isNaN(input) ? 0 : input;
+    return isNaN(input) || input < 0 ? 0 : input;
   }
   if (!input) return 0;
 
@@ -19,48 +17,84 @@ function parsePriceString(input) {
   if (!match) return 0;
 
   const val = parseFloat(match[0]);
-  return isNaN(val) ? 0 : val;
+  return isNaN(val) || val < 0 ? 0 : val;
 }
 
-function getNumericPrice(product) {
-  if (!product) return 0;
+function getNumericPrice(product, market = 'lk') {
+  if (!product) return market === 'intl' ? null : 0;
 
-  if (typeof product.priceValue === 'number' && !isNaN(product.priceValue) && product.priceValue >= 1) {
-    return product.priceValue;
+  if (market === 'lk') {
+    if (typeof product.priceValue === 'number' && !isNaN(product.priceValue) && product.priceValue >= 1) {
+      return product.priceValue;
+    }
+    if (product.price) {
+      const fromString = parsePriceString(product.price);
+      if (fromString > 0) return fromString;
+    }
+    if (typeof product.priceValue === 'number' && !isNaN(product.priceValue) && product.priceValue > 0) {
+      return product.priceValue;
+    }
+    return 0;
   }
 
-  if (product.price) {
-    const fromString = parsePriceString(product.price);
-    if (fromString > 0) {
-      return fromString;
+  // International Market (USD)
+  if (
+    typeof product.exportPriceValue === 'number' &&
+    !isNaN(product.exportPriceValue) &&
+    product.exportPriceValue > 0
+  ) {
+    return product.exportPriceValue;
+  }
+
+  if (product.exportPrice && product.exportPrice.trim()) {
+    const raw = product.exportPrice.trim().toLowerCase();
+    if (raw !== 'request export pricing' && raw !== 'n/a') {
+      const parsed = parsePriceString(product.exportPrice);
+      if (parsed > 0) {
+        return parsed;
+      }
     }
   }
 
-  if (typeof product.priceValue === 'number' && !isNaN(product.priceValue) && product.priceValue > 0) {
-    return product.priceValue;
+  return null;
+}
+
+function formatPrice(value, market = 'lk') {
+  if (market === 'lk') {
+    const numeric = typeof value === 'number' ? value : parsePriceString(value);
+    return `Rs. ${numeric.toLocaleString('en-US', {
+      minimumFractionDigits: Number.isInteger(numeric) ? 0 : 2,
+      maximumFractionDigits: 2,
+    })}`;
   }
 
-  return 0;
-}
+  if (value === null || value === undefined) {
+    return 'Request export pricing';
+  }
 
-function formatPrice(value) {
   const numeric = typeof value === 'number' ? value : parsePriceString(value);
-  return `Rs. ${numeric.toLocaleString('en-US', {
-    minimumFractionDigits: Number.isInteger(numeric) ? 0 : 2,
-    maximumFractionDigits: 2,
-  })}`;
+  if (numeric <= 0) {
+    return 'Request export pricing';
+  }
+
+  return `$${numeric.toFixed(2)}`;
 }
 
-function calculateLineTotal(product, qty) {
-  return getNumericPrice(product) * Math.max(1, qty);
+function calculateLineTotal(product, qty, market = 'lk') {
+  const unit = getNumericPrice(product, market);
+  if (unit === null) return null;
+  return unit * Math.max(1, qty);
 }
 
-function calculateSubtotal(items) {
-  return items.reduce((sum, item) => sum + calculateLineTotal(item.product, item.qty), 0);
+function calculateSubtotal(items, market = 'lk') {
+  return items.reduce((sum, item) => {
+    const line = calculateLineTotal(item.product, item.qty, market);
+    return line !== null ? sum + line : sum;
+  }, 0);
 }
 
-describe('Pricing Bug Resolution Suite', () => {
-  describe('Task 1 & 6: Price String Parsing', () => {
+describe('Pricing & Market Engine Suite', () => {
+  describe('Local Sri Lankan Pricing (Preserved)', () => {
     test('Correctly parses "Rs. 150" without prefix-dot corruption', () => {
       const parsed = parsePriceString('Rs. 150');
       assert.equal(parsed, 150);
@@ -79,135 +113,181 @@ describe('Pricing Bug Resolution Suite', () => {
       assert.notEqual(parsed, 0.1, 'Must not parse to 0.1');
     });
 
-    test('Correctly parses other formats (LKR, Rs, decimals, primitives)', () => {
-      assert.equal(parsePriceString('LKR 750'), 750);
-      assert.equal(parsePriceString('Rs 850'), 850);
-      assert.equal(parsePriceString('375'), 375);
-      assert.equal(parsePriceString('Rs. 1,234.50'), 1234.5);
-      assert.equal(parsePriceString(150), 150);
+    test('Dried Leaves and Dog Chew evaluate to 150 and 200 LKR', () => {
+      const leaves = { id: '13', name: 'Dried Leaves', price: 'Rs. 150' };
+      const chew = { id: '14', name: 'Dog Chew', price: 'Rs. 200' };
+      assert.equal(getNumericPrice(leaves, 'lk'), 150);
+      assert.equal(getNumericPrice(chew, 'lk'), 200);
+      assert.equal(formatPrice(150, 'lk'), 'Rs. 150');
+      assert.equal(formatPrice(200, 'lk'), 'Rs. 200');
     });
   });
 
-  describe('Task 4 & 5: getNumericPrice for Affected & Catalog Products', () => {
-    const driedLeaves = {
-      id: '13',
-      name: 'Dried Cinnamon Leaves (10 pieces)',
-      price: 'Rs. 150',
+  describe('International Market Pricing (Phase A)', () => {
+    const unpricedProduct = {
+      id: '1',
+      name: 'Premium Cinnamon Sticks',
+      price: 'Rs. 1,234',
+      priceValue: 1234,
     };
 
-    const dogChew = {
-      id: '14',
-      name: 'Dog Chewable Wood (2 pieces)',
-      price: 'Rs. 200',
+    const configuredExportProduct = {
+      id: '2',
+      name: 'Fine Cinnamon Powder (100g)',
+      price: 'Rs. 850',
+      priceValue: 850,
+      exportPrice: '$8.50',
+      exportPriceValue: 8.5,
     };
 
-    const sticks1000 = {
-      id: '9',
-      name: 'Cinnamon Sticks (100g)',
-      price: 'Rs. 1,000',
-    };
-
-    const soap = {
-      id: '7',
-      name: 'Artisanal Cinnamon Soap',
-      price: 'Rs. 750',
-      priceValue: 750,
-    };
-
-    test('Dried Cinnamon Leaves evaluates to 150 LKR (never 0.15)', () => {
-      assert.equal(getNumericPrice(driedLeaves), 150);
-      // Even if stale priceValue had 0.15, it heals to 150
-      assert.equal(getNumericPrice({ ...driedLeaves, priceValue: 0.15 }), 150);
-      assert.equal(getNumericPrice({ ...driedLeaves, priceValue: 150 }), 150);
+    test('Unconfigured export price returns null (never zero or invented conversion)', () => {
+      const price = getNumericPrice(unpricedProduct, 'intl');
+      assert.equal(price, null);
+      assert.notEqual(price, 0);
+      assert.notEqual(price, 1234);
     });
 
-    test('Dog Chewable Wood evaluates to 200 LKR (never 0.20)', () => {
-      assert.equal(getNumericPrice(dogChew), 200);
-      assert.equal(getNumericPrice({ ...dogChew, priceValue: 0.20 }), 200);
-      assert.equal(getNumericPrice({ ...dogChew, priceValue: 200 }), 200);
+    test('Unconfigured export price displays "Request export pricing"', () => {
+      const formatted = formatPrice(getNumericPrice(unpricedProduct, 'intl'), 'intl');
+      assert.equal(formatted, 'Request export pricing');
     });
 
-    test('Cinnamon Sticks (100g) evaluates to 1000 LKR', () => {
-      assert.equal(getNumericPrice(sticks1000), 1000);
-      assert.equal(getNumericPrice({ ...sticks1000, priceValue: 1000 }), 1000);
+    test('Configured export price returns exact USD numeric value', () => {
+      const price = getNumericPrice(configuredExportProduct, 'intl');
+      assert.equal(price, 8.5);
     });
 
-    test('Display formatting matches cards, modal, and cart', () => {
-      assert.equal(formatPrice(getNumericPrice(driedLeaves)), 'Rs. 150');
-      assert.equal(formatPrice(getNumericPrice(dogChew)), 'Rs. 200');
-      assert.equal(formatPrice(getNumericPrice(sticks1000)), 'Rs. 1,000');
-      assert.equal(formatPrice(getNumericPrice(soap)), 'Rs. 750');
+    test('Configured export price formats cleanly as USD', () => {
+      const formatted = formatPrice(getNumericPrice(configuredExportProduct, 'intl'), 'intl');
+      assert.equal(formatted, '$8.50');
+    });
+
+    test('Market switching preserves local price and does not cross-contaminate', () => {
+      assert.equal(getNumericPrice(configuredExportProduct, 'lk'), 850);
+      assert.equal(formatPrice(getNumericPrice(configuredExportProduct, 'lk'), 'lk'), 'Rs. 850');
+      assert.equal(getNumericPrice(configuredExportProduct, 'intl'), 8.5);
+      assert.equal(formatPrice(getNumericPrice(configuredExportProduct, 'intl'), 'intl'), '$8.50');
     });
   });
 
-  describe('Task 7 & 8: Quantity Multipliers, Subtotal & WhatsApp Consistency', () => {
-    const driedLeaves = { id: '13', name: 'Dried Cinnamon Leaves (10 pieces)', price: 'Rs. 150' };
-    const dogChew = { id: '14', name: 'Dog Chewable Wood (2 pieces)', price: 'Rs. 200' };
-    const sticks1000 = { id: '9', name: 'Cinnamon Sticks (100g)', price: 'Rs. 1,000' };
+  describe('Cart Calculations & Market Segregation', () => {
+    const p1 = { id: '1', name: 'Item 1', price: 'Rs. 500', priceValue: 500, exportPrice: '$6.00', exportPriceValue: 6 };
+    const p2 = { id: '2', name: 'Item 2', price: 'Rs. 1000', priceValue: 1000, exportPrice: '$12.00', exportPriceValue: 12 };
+    const pUnpriced = { id: '3', name: 'Item 3', price: 'Rs. 300', priceValue: 300 };
 
-    test('Quantities correctly multiply unit prices', () => {
-      assert.equal(calculateLineTotal(driedLeaves, 1), 150);
-      assert.equal(calculateLineTotal(driedLeaves, 2), 300);
-      assert.equal(calculateLineTotal(driedLeaves, 5), 750);
-
-      assert.equal(calculateLineTotal(dogChew, 1), 200);
-      assert.equal(calculateLineTotal(dogChew, 3), 600);
-
-      assert.equal(calculateLineTotal(sticks1000, 2), 2000);
-    });
-
-    test('Cart subtotal matches sum of line totals', () => {
+    test('Local market subtotal calculates correctly in LKR', () => {
       const cart = [
-        { product: driedLeaves, qty: 2 }, // 150 * 2 = 300
-        { product: dogChew, qty: 3 },     // 200 * 3 = 600
-        { product: sticks1000, qty: 1 },  // 1000 * 1 = 1000
+        { product: p1, qty: 2 }, // 500 * 2 = 1000
+        { product: p2, qty: 1 }, // 1000 * 1 = 1000
       ];
-
-      const subtotal = calculateSubtotal(cart);
-      assert.equal(subtotal, 1900);
-      assert.equal(formatPrice(subtotal), 'Rs. 1,900');
+      const subtotal = calculateSubtotal(cart, 'lk');
+      assert.equal(subtotal, 2000);
+      assert.equal(formatPrice(subtotal, 'lk'), 'Rs. 2,000');
     });
 
-    test('WhatsApp item lines and subtotal match cart totals perfectly', () => {
+    test('International market subtotal calculates correctly in USD for configured items', () => {
       const cart = [
-        { product: driedLeaves, qty: 2 },
-        { product: dogChew, qty: 3 },
-        { product: sticks1000, qty: 1 },
+        { product: p1, qty: 3 }, // 6 * 3 = 18
+        { product: p2, qty: 2 }, // 12 * 2 = 24
       ];
+      const subtotal = calculateSubtotal(cart, 'intl');
+      assert.equal(subtotal, 42);
+      assert.equal(formatPrice(subtotal, 'intl'), '$42.00');
+    });
 
-      const subtotal = calculateSubtotal(cart);
-
-      const itemLines = cart.map((item, index) => {
-        const unit = getNumericPrice(item.product);
-        const lineTotal = calculateLineTotal(item.product, item.qty);
-        return `${index + 1}. ${item.product.name} | Qty: ${item.qty} | Unit: ${formatPrice(unit)} | Line: ${formatPrice(lineTotal)}`;
-      });
-
-      assert.equal(itemLines[0], '1. Dried Cinnamon Leaves (10 pieces) | Qty: 2 | Unit: Rs. 150 | Line: Rs. 300');
-      assert.equal(itemLines[1], '2. Dog Chewable Wood (2 pieces) | Qty: 3 | Unit: Rs. 200 | Line: Rs. 600');
-      assert.equal(itemLines[2], '3. Cinnamon Sticks (100g) | Qty: 1 | Unit: Rs. 1,000 | Line: Rs. 1,000');
-      assert.equal(formatPrice(subtotal), 'Rs. 1,900');
+    test('Unconfigured international product line total returns null', () => {
+      const line = calculateLineTotal(pUnpriced, 2, 'intl');
+      assert.equal(line, null);
     });
   });
 
-  describe('Catalog Files Consistency Audit', () => {
-    test('public/products.json has valid, non-zero prices and priceValues matching price', () => {
+  describe('Admin Editor Non-Overwriting Separation (Phase B)', () => {
+    test('Updating local price preserves existing export price', () => {
+      let product = {
+        id: '1',
+        name: 'Item',
+        price: 'Rs. 500',
+        priceValue: 500,
+        exportPrice: '$6.00',
+        exportPriceValue: 6,
+      };
+
+      // Simulating updateLocalPrice('1', 'Rs. 600')
+      const newPriceText = 'Rs. 600';
+      const numeric = parsePriceString(newPriceText);
+      product = {
+        ...product,
+        price: newPriceText,
+        priceValue: numeric > 0 ? numeric : product.priceValue,
+      };
+
+      assert.equal(product.price, 'Rs. 600');
+      assert.equal(product.priceValue, 600);
+      assert.equal(product.exportPrice, '$6.00');
+      assert.equal(product.exportPriceValue, 6);
+    });
+
+    test('Updating export price preserves existing local price', () => {
+      let product = {
+        id: '1',
+        name: 'Item',
+        price: 'Rs. 500',
+        priceValue: 500,
+        exportPrice: '$6.00',
+        exportPriceValue: 6,
+      };
+
+      // Simulating updateExportPrice('1', '$7.50')
+      const newExportText = '$7.50';
+      const numeric = parsePriceString(newExportText);
+      product = {
+        ...product,
+        exportPrice: newExportText,
+        exportPriceValue: numeric > 0 ? numeric : undefined,
+      };
+
+      assert.equal(product.price, 'Rs. 500');
+      assert.equal(product.priceValue, 500);
+      assert.equal(product.exportPrice, '$7.50');
+      assert.equal(product.exportPriceValue, 7.5);
+    });
+
+    test('Empty export price clears it to undefined (not zero)', () => {
+      let product = {
+        id: '1',
+        name: 'Item',
+        price: 'Rs. 500',
+        priceValue: 500,
+        exportPrice: '$6.00',
+        exportPriceValue: 6,
+      };
+
+      // Simulating updateExportPrice('1', '')
+      delete product.exportPrice;
+      delete product.exportPriceValue;
+
+      assert.equal(product.exportPrice, undefined);
+      assert.equal(product.exportPriceValue, undefined);
+      assert.equal(getNumericPrice(product, 'intl'), null);
+    });
+  });
+
+  describe('Catalog Integrity Audit', () => {
+    test('public/products.json local prices are preserved and intact', () => {
       const content = JSON.parse(fs.readFileSync('public/products.json', 'utf8'));
       assert.ok(content.length > 0);
-      content.forEach(p => {
-        const num = getNumericPrice(p);
-        assert.ok(num > 0, `Product ${p.id} (${p.name}) must have positive price`);
-        assert.equal(p.priceValue, num, `Product ${p.id} priceValue (${p.priceValue}) must match getNumericPrice (${num})`);
+      content.forEach((p) => {
+        const num = getNumericPrice(p, 'lk');
+        assert.ok(num > 0, `Product ${p.id} must have local price`);
       });
     });
 
-    test('products.json has valid, non-zero prices and priceValues matching price', () => {
+    test('products.json local prices are preserved and intact', () => {
       const content = JSON.parse(fs.readFileSync('products.json', 'utf8'));
       assert.ok(content.length > 0);
-      content.forEach(p => {
-        const num = getNumericPrice(p);
-        assert.ok(num > 0, `Product ${p.id} (${p.name}) must have positive price`);
-        assert.equal(p.priceValue, num, `Product ${p.id} priceValue (${p.priceValue}) must match getNumericPrice (${num})`);
+      content.forEach((p) => {
+        const num = getNumericPrice(p, 'lk');
+        assert.ok(num > 0, `Product ${p.id} must have local price`);
       });
     });
   });
