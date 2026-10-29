@@ -1,6 +1,7 @@
 
 import { StrictMode } from 'react';
 import ReactDOM from 'react-dom/client';
+import { Analytics } from '@vercel/analytics/react';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
 
@@ -17,5 +18,6 @@ root.render(
     <ErrorBoundary>
       <App />
     </ErrorBoundary>
+    <Analytics />
   </StrictMode>
 );

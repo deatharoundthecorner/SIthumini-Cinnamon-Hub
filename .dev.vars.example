@@ -1,0 +1,40 @@
+# =============================================================================
+# SITHUMINI CINNAMON HUB — CLOUDFLARE WORKER LOCAL CONFIGURATION TEMPLATE
+# Copy this file to .dev.vars for local testing with `wrangler dev`.
+# For production deployment, set secrets using `wrangler secret put <NAME>`.
+# NEVER commit .dev.vars or real credentials to Git.
+# =============================================================================
+
+# Node Environment
+NODE_ENV=development
+
+# -----------------------------------------------------------------------------
+# ADMIN AUTHENTICATION (WORKER SECRETS)
+# -----------------------------------------------------------------------------
+ADMIN_USERNAME=your_admin_username_here
+
+# Generate salted PBKDF2-SHA256 password hash (format: pbkdf2_sha256$100000$saltHex$hashHex):
+# node -e "const crypto=require('crypto'); const salt=crypto.randomBytes(16).toString('hex'); const hash=crypto.pbkdf2Sync('YOUR_PASSWORD', Buffer.from(salt, 'hex'), 100000, 32, 'sha256').toString('hex'); console.log('pbkdf2_sha256$100000$' + salt + '$' + hash)"
+ADMIN_PASSWORD_HASH=pbkdf2_sha256$100000$replace_with_32_hex_salt$replace_with_64_hex_hash
+
+# Optional plaintext fallback for local dev only (strictly disallowed in production):
+ADMIN_PASSWORD=your_admin_password_here
+
+# Generate random 32-char session secret:
+# node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+SESSION_SECRET=generate_a_random_32_character_session_secret_here
+
+# -----------------------------------------------------------------------------
+# META WHATSAPP CLOUD API (OFFICIAL GRAPH API v26.0)
+# -----------------------------------------------------------------------------
+META_GRAPH_API_VERSION=v26.0
+WHATSAPP_ACCESS_TOKEN=your_meta_system_user_access_token_here
+WHATSAPP_PHONE_NUMBER_ID=your_meta_phone_number_id_here
+WHATSAPP_VERIFY_TOKEN=create_a_secure_random_verify_token_here
+WHATSAPP_APP_SECRET=your_meta_app_secret_here
+OWNER_PHONE_NUMBER=94771234567
+
+# -----------------------------------------------------------------------------
+# WORKER CRON / DIAGNOSTIC AUTHORIZATION
+# -----------------------------------------------------------------------------
+CRON_SECRET=generate_a_random_32_character_cron_secret_here

@@ -9,7 +9,7 @@ import ProductGrid from './components/ProductGrid';
 import WhyUs from './components/WhyUs';
 import Contact from './components/Contact';
 import Footer from './components/Footer';
-import { Product } from './types';
+import { Product, Market } from './types';
 import ProductModal from './components/ProductModal';
 import Cart, { CartItem } from './components/Cart';
 import AdminPage from './components/AdminPage';
@@ -17,12 +17,24 @@ import FloatingWhatsApp from './components/FloatingWhatsApp';
 import { getNumericPrice, formatPrice } from './utils/pricing';
 
 const sanitizeProduct = (p: Product): Product => {
-  const numeric = getNumericPrice(p);
-  return {
+  const localNum = getNumericPrice(p, 'lk');
+  const exportNum = getNumericPrice(p, 'intl');
+
+  const sanitized: Product = {
     ...p,
-    priceValue: numeric,
-    price: formatPrice(numeric),
+    priceValue: localNum || undefined,
+    price: formatPrice(localNum, 'lk'),
   };
+
+  if (exportNum !== null && exportNum > 0) {
+    sanitized.exportPriceValue = exportNum;
+    sanitized.exportPrice = formatPrice(exportNum, 'intl');
+  } else {
+    delete sanitized.exportPrice;
+    delete sanitized.exportPriceValue;
+  }
+
+  return sanitized;
 };
 
 const sanitizeProducts = (list: unknown): Product[] => {
@@ -38,35 +50,64 @@ const App: React.FC = () => {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [modalProduct, setModalProduct] = useState<Product | null>(null);
   const [showAdminPage, setShowAdminPage] = useState(false);
+  const [market, setMarket] = useState<Market>('lk');
+
+  // Hydrate market preference from localStorage
+  useEffect(() => {
+    try {
+      const savedMarket = localStorage.getItem('selectedMarket') as Market;
+      if (savedMarket === 'lk' || savedMarket === 'intl') {
+        setMarket(savedMarket);
+      }
+    } catch (e) {}
+  }, []);
+
+  const handleSelectMarket = (newMarket: Market) => {
+    setMarket(newMarket);
+    try {
+      localStorage.setItem('selectedMarket', newMarket);
+    } catch (e) {}
+  };
 
   useEffect(() => {
     const loadProducts = async () => {
       try {
-        const saved = localStorage.getItem('productsOverride');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setProducts(sanitizeProducts(parsed));
-            setLoading(false);
-            return;
-          }
-        }
-
-        // try server API first (if running)
+        // 1. Prioritize live server / database API first
         try {
           const apiRes = await fetch('/api/products');
           if (apiRes.ok) {
             const data = await apiRes.json();
             if (Array.isArray(data) && data.length > 0) {
-              setProducts(sanitizeProducts(data));
+              const sanitized = sanitizeProducts(data);
+              setProducts(sanitized);
+              try {
+                localStorage.setItem('cachedProducts', JSON.stringify(sanitized));
+                localStorage.removeItem('productsOverride');
+              } catch (e) {}
               setLoading(false);
               return;
             }
+          } else {
+            console.error(`Backend /api/products responded with status ${apiRes.status}`);
           }
         } catch (e) {
-          // ignore and fallback to bundled file
+          // API unavailable; fall through to cache or bundled file
         }
 
+        // 2. Check offline cache if API was unreachable
+        const cached = localStorage.getItem('cachedProducts') || localStorage.getItem('productsOverride');
+        if (cached) {
+          try {
+            const parsed = JSON.parse(cached);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              setProducts(sanitizeProducts(parsed));
+              setLoading(false);
+              return;
+            }
+          } catch (e) {}
+        }
+
+        // 3. Fallback to bundled static public catalog
         const response = await fetch('./products.json');
         const data = await response.json();
         setProducts(sanitizeProducts(data));
@@ -81,7 +122,7 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    // hydrate cart from localStorage and repair any stale corrupted item prices
+    // hydrate cart from localStorage and repair any stale item prices
     try {
       const raw = localStorage.getItem('cart');
       if (raw) {
@@ -145,9 +186,10 @@ const App: React.FC = () => {
     const sanitized = sanitizeProducts(newProducts);
     setProducts(sanitized);
     try {
-      localStorage.setItem('productsOverride', JSON.stringify(sanitized));
+      localStorage.setItem('cachedProducts', JSON.stringify(sanitized));
+      localStorage.removeItem('productsOverride');
     } catch (e) {
-      console.warn('Could not save products override', e);
+      console.warn('Could not cache products', e);
     }
   };
 
@@ -169,6 +211,8 @@ const App: React.FC = () => {
               setSearchQuery={setSearchQuery}
               cartCount={totalCartCount}
               onOpenCart={() => setIsCartOpen(true)}
+              market={market}
+              onSelectMarket={handleSelectMarket}
             />
             <main>
               <section id="home">
@@ -196,6 +240,7 @@ const App: React.FC = () => {
                       {/* Product Trays for Curated Collections */}
                       <ProductTray
                         products={products}
+                        market={market}
                         onAddToCart={handleAddToCart}
                         onOpenModal={(p) => setModalProduct(p)}
                       />
@@ -203,6 +248,7 @@ const App: React.FC = () => {
                       {/* Full Catalog with Category Pills & Sorting */}
                       <ProductGrid
                         products={products}
+                        market={market}
                         searchQuery={searchQuery}
                         onAddToCart={handleAddToCart}
                         onOpenModal={(p) => setModalProduct(p)}
@@ -213,6 +259,7 @@ const App: React.FC = () => {
 
                   <ProductModal
                     product={modalProduct}
+                    market={market}
                     onClose={() => setModalProduct(null)}
                     onAddToCart={(p) => {
                       handleAddToCart(p);
@@ -230,11 +277,12 @@ const App: React.FC = () => {
             </main>
             <Footer />
 
-            {/* Slide-out Cart Drawer with Structured WhatsApp Checkout */}
+            {/* Slide-out Cart Drawer with Structured WhatsApp Checkout & Market Pricing */}
             <Cart
               isOpen={isCartOpen}
               onClose={() => setIsCartOpen(false)}
               items={cartItems}
+              market={market}
               onRemove={handleRemove}
               onChangeQty={handleChangeQty}
               onClearCart={handleClearCart}

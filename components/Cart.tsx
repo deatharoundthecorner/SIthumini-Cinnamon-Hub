@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Product } from '../types';
+import { Product, Market } from '../types';
 import {
   ShoppingBag,
   X,
@@ -13,6 +13,7 @@ import {
   MapPin,
   AlertCircle,
   FileText,
+  Globe,
 } from 'lucide-react';
 import {
   getNumericPrice,
@@ -20,6 +21,8 @@ import {
   parsePriceString,
   calculateLineTotal,
   calculateSubtotal,
+  hasPriceForMarket,
+  getMarketCurrency,
 } from '../utils/pricing';
 
 export interface CartItem {
@@ -31,6 +34,7 @@ interface CartProps {
   isOpen: boolean;
   onClose: () => void;
   items: CartItem[];
+  market?: Market;
   onRemove: (id: string) => void;
   onChangeQty: (id: string, qty: number) => void;
   onCheckout?: () => void;
@@ -38,12 +42,21 @@ interface CartProps {
 }
 
 // Re-export pricing helpers for backward compatibility across components
-export { getNumericPrice, formatPrice, parsePriceString, calculateLineTotal, calculateSubtotal };
+export {
+  getNumericPrice,
+  formatPrice,
+  parsePriceString,
+  calculateLineTotal,
+  calculateSubtotal,
+  hasPriceForMarket,
+  getMarketCurrency,
+};
 
 const Cart: React.FC<CartProps> = ({
   isOpen,
   onClose,
   items,
+  market = 'lk',
   onRemove,
   onChangeQty,
   onClearCart,
@@ -51,6 +64,7 @@ const Cart: React.FC<CartProps> = ({
   // Optional customer checkout details
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [destinationCountry, setDestinationCountry] = useState('');
   const [deliveryCity, setDeliveryCity] = useState('');
   const [deliveryNotes, setDeliveryNotes] = useState('');
   const [showDetailsForm, setShowDetailsForm] = useState(false);
@@ -78,57 +92,111 @@ const Cart: React.FC<CartProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
+  const currencyInfo = getMarketCurrency(market);
   const totalItemCount = items.reduce((sum, item) => sum + item.qty, 0);
 
-  const subtotal = calculateSubtotal(items);
+  const subtotal = calculateSubtotal(items, market);
 
   // Check if any cart item is out of stock (stock === 0)
   const hasOutOfStockItem = items.some((item) => item.product.stock === 0);
 
+  // Check if any cart item lacks configured export price in international mode
+  const hasUnpricedExportItem =
+    market === 'intl' &&
+    items.some((item) => getNumericPrice(item.product, 'intl') === null);
+
+  const isCheckoutDisabled = hasOutOfStockItem || hasUnpricedExportItem;
+
   // Structured WhatsApp Checkout Handler
   const handleStructuredCheckout = () => {
-    if (typeof window === 'undefined' || items.length === 0 || hasOutOfStockItem) return;
+    if (typeof window === 'undefined' || items.length === 0 || isCheckoutDisabled) return;
 
     // Generate unique order reference
-    const orderRef = `SCH-${Date.now().toString().slice(-6)}`;
+    const orderRef = `SCH-${Date.now().toString(36).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
     const today = new Date().toLocaleDateString('en-GB', {
       day: 'numeric',
       month: 'short',
       year: 'numeric',
     });
 
+    const isIntl = market === 'intl';
+
+    // Persist customer order request to backend /api/orders
+    try {
+      fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderRef,
+          customerName: nameStr,
+          customerPhone: phoneStr,
+          market,
+          currency: isIntl ? 'USD' : 'LKR',
+          destinationCountry: countryStr,
+          deliveryCity: cityStr,
+          customerNotes: notesStr,
+          items: items.map(item => ({
+            productId: item.product.id,
+            quantity: item.qty,
+          })),
+          source: 'web',
+          status: 'draft',
+        }),
+      }).catch(err => {
+        console.warn('[Cart] Non-blocking: Could not record order to /api/orders:', err);
+      });
+    } catch (e) { }
+
     const itemLines = items
       .map((item, index) => {
-        const unit = getNumericPrice(item.product);
-        const lineTotal = calculateLineTotal(item.product, item.qty);
-        return `${index + 1}. ${item.product.name}\n   Qty: ${item.qty} | Unit: ${formatPrice(unit)} | Line: ${formatPrice(lineTotal)}`;
+        const unit = getNumericPrice(item.product, market);
+        const lineTotal = calculateLineTotal(item.product, item.qty, market);
+        const unitFormatted = formatPrice(unit, market);
+        const lineFormatted = lineTotal !== null ? formatPrice(lineTotal, market) : 'Request Quote';
+        return `${index + 1}. ${item.product.name}\n   Qty: ${item.qty} | Unit: ${unitFormatted} | Line: ${lineFormatted}`;
       })
       .join('\n');
 
     let customerSection = '';
     const nameStr = customerName.trim();
     const phoneStr = customerPhone.trim();
+    const countryStr = destinationCountry.trim();
     const cityStr = deliveryCity.trim();
     const notesStr = deliveryNotes.trim();
 
-    if (nameStr || phoneStr || cityStr || notesStr) {
-      customerSection = `\n👤 Customer Details:\n` +
+    if (nameStr || phoneStr || countryStr || cityStr || notesStr) {
+      customerSection =
+        `\n👤 Customer Details:\n` +
         (nameStr ? `• Name: ${nameStr}\n` : '') +
         (phoneStr ? `• Contact: ${phoneStr}\n` : '') +
+        (isIntl && countryStr ? `• Destination Country: ${countryStr}\n` : '') +
         (cityStr ? `• Delivery City/Area: ${cityStr}\n` : '') +
         (notesStr ? `• Notes: ${notesStr}\n` : '');
     }
 
+    const header = isIntl
+      ? `🌿 SITHUMINI CINNAMON HUB — INTERNATIONAL EXPORT ORDER REQUEST\n` +
+        `Reference: ${orderRef}\n` +
+        `Date: ${today}\n` +
+        `Market: International (${currencyInfo.code} - ${currencyInfo.symbol})\n`
+      : `🌿 SITHUMINI CINNAMON HUB — ORDER REQUEST\n` +
+        `Reference: ${orderRef}\n` +
+        `Date: ${today}\n` +
+        `Market: Sri Lanka (LKR - Rs.)\n`;
+
+    const shippingNotice = isIntl
+      ? `🚚 International Shipping: To be calculated and confirmed based on parcel weight and destination country (DHL / FedEx / EMS).\n\n` +
+        `⚠️ Note: This is an international export order request. Our sales team will verify fresh harvest batch availability, phytosanitary requirements, and exact air-freight courier charges for ${countryStr || 'your destination'} before finalizing.`
+      : `🚚 Delivery Fees: To be confirmed based on delivery destination.\n\n` +
+        `⚠️ Note: This is an order request. Please confirm product availability and total delivery costs before final confirmation.`;
+
     const messageText =
-      `🌿 SITHUMINI CINNAMON HUB — ORDER REQUEST\n` +
-      `Reference: ${orderRef}\n` +
-      `Date: ${today}\n` +
+      `${header}` +
       customerSection +
       `\n📦 Requested Products:\n` +
       `${itemLines}\n\n` +
-      `📊 Estimated Subtotal: ${formatPrice(subtotal)}\n` +
-      `🚚 Delivery Fees: To be confirmed based on delivery destination.\n\n` +
-      `⚠️ Note: This is an order request. Please confirm product availability and total delivery costs before final confirmation.`;
+      `📊 Estimated Subtotal: ${formatPrice(subtotal, market)}\n` +
+      shippingNotice;
 
     const encoded = encodeURIComponent(messageText);
     window.open(`https://wa.me/94785197533?text=${encoded}`, '_blank');
@@ -160,7 +228,18 @@ const Cart: React.FC<CartProps> = ({
                 <ShoppingBag size={20} />
               </div>
               <div>
-                <h2 className="text-lg font-bold font-serif text-[#4A3728]">Your Cart</h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-bold font-serif text-[#4A3728]">Your Cart</h2>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#8B4513]/10 text-[#8B4513]">
+                    {market === 'intl' ? (
+                      <>
+                        <Globe size={10} /> USD Export
+                      </>
+                    ) : (
+                      '🇱🇰 LKR'
+                    )}
+                  </span>
+                </div>
                 <p className="text-xs text-gray-500">
                   {totalItemCount} {totalItemCount === 1 ? 'item' : 'items'} selected
                 </p>
@@ -210,7 +289,7 @@ const Cart: React.FC<CartProps> = ({
               </div>
             ) : (
               <>
-                {/* Out of stock warning banner if applicable */}
+                {/* Out of stock warning banner */}
                 {hasOutOfStockItem && (
                   <div className="flex items-start gap-2.5 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs">
                     <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
@@ -220,17 +299,30 @@ const Cart: React.FC<CartProps> = ({
                   </div>
                 )}
 
+                {/* Missing export price warning banner */}
+                {hasUnpricedExportItem && (
+                  <div className="flex items-start gap-2.5 p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs">
+                    <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+                    <span>
+                      Export pricing has not yet been configured for one or more items in your cart. Please remove them or inquire directly via WhatsApp for a tailored export quotation.
+                    </span>
+                  </div>
+                )}
+
                 {/* List of items */}
                 {items.map((item) => {
-                  const itemPrice = getNumericPrice(item.product);
-                  const lineTotal = calculateLineTotal(item.product, item.qty);
+                  const itemPrice = getNumericPrice(item.product, market);
+                  const isConfigured = itemPrice !== null && itemPrice > 0;
+                  const lineTotal = calculateLineTotal(item.product, item.qty, market);
                   const isItemOutOfStock = item.product.stock === 0;
 
                   return (
                     <article
                       key={item.product.id}
                       className={`flex gap-3 sm:gap-4 p-3 sm:p-4 bg-white rounded-2xl border transition-shadow ${
-                        isItemOutOfStock ? 'border-red-200 bg-red-50/30' : 'border-gray-100 shadow-sm'
+                        isItemOutOfStock || (market === 'intl' && !isConfigured)
+                          ? 'border-amber-200 bg-amber-50/20'
+                          : 'border-gray-100 shadow-sm'
                       }`}
                     >
                       {/* Thumbnail */}
@@ -253,13 +345,18 @@ const Cart: React.FC<CartProps> = ({
                             <h4 className="text-sm font-bold text-[#4A3728] truncate leading-tight">
                               {item.product.name}
                             </h4>
-                            <div className="flex items-center gap-1.5 mt-0.5">
+                            <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
                               <span className="text-[10px] uppercase tracking-wider font-semibold text-[#8B4513] bg-[#8B4513]/10 px-2 py-0.5 rounded-full">
                                 {item.product.category}
                               </span>
                               {isItemOutOfStock && (
                                 <span className="text-[10px] font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded-full">
                                   Out of Stock
+                                </span>
+                              )}
+                              {market === 'intl' && !isConfigured && (
+                                <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full">
+                                  Price on Request
                                 </span>
                               )}
                             </div>
@@ -314,11 +411,13 @@ const Cart: React.FC<CartProps> = ({
                           {/* Line Total */}
                           <div className="text-right">
                             <div className="text-sm font-bold text-[#8B4513]">
-                              {formatPrice(lineTotal)}
+                              {isConfigured && lineTotal !== null
+                                ? formatPrice(lineTotal, market)
+                                : 'Quote Req.'}
                             </div>
-                            {item.qty > 1 && (
+                            {item.qty > 1 && isConfigured && (
                               <div className="text-[10px] text-gray-400">
-                                {formatPrice(itemPrice)} each
+                                {formatPrice(itemPrice, market)} each
                               </div>
                             )}
                           </div>
@@ -337,7 +436,11 @@ const Cart: React.FC<CartProps> = ({
                   >
                     <div className="flex items-center gap-2">
                       <MapPin size={15} className="text-[#8B4513]" />
-                      <span>Add Delivery Details (Optional)</span>
+                      <span>
+                        {market === 'intl'
+                          ? 'Add International Destination Details'
+                          : 'Add Delivery Details (Optional)'}
+                      </span>
                     </div>
                     {showDetailsForm ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
                   </button>
@@ -365,33 +468,48 @@ const Cart: React.FC<CartProps> = ({
                           type="tel"
                           value={customerPhone}
                           onChange={(e) => setCustomerPhone(e.target.value)}
-                          placeholder="e.g. 077 123 4567"
+                          placeholder={market === 'intl' ? 'e.g. +44 7123 456789' : 'e.g. 077 123 4567'}
                           className="w-full text-xs p-2.5 rounded-lg border border-gray-200 focus:outline-none focus:ring-1 focus:ring-[#8B4513]"
                         />
                       </div>
 
+                      {market === 'intl' && (
+                        <div>
+                          <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1">
+                            Destination Country (Required for Freight Calculation)
+                          </label>
+                          <input
+                            type="text"
+                            value={destinationCountry}
+                            onChange={(e) => setDestinationCountry(e.target.value)}
+                            placeholder="e.g. United Kingdom, USA, Australia, Germany..."
+                            className="w-full text-xs p-2.5 rounded-lg border border-gray-200 focus:outline-none focus:ring-1 focus:ring-[#8B4513]"
+                          />
+                        </div>
+                      )}
+
                       <div>
                         <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1">
-                          Delivery City / District (Optional)
+                          {market === 'intl' ? 'Destination City / Port / Postal Code' : 'Delivery City / District (Optional)'}
                         </label>
                         <input
                           type="text"
                           value={deliveryCity}
                           onChange={(e) => setDeliveryCity(e.target.value)}
-                          placeholder="e.g. Colombo, Kandy, Galle..."
+                          placeholder={market === 'intl' ? 'e.g. London, SW1A 1AA / New York, 10001' : 'e.g. Colombo, Kandy, Galle...'}
                           className="w-full text-xs p-2.5 rounded-lg border border-gray-200 focus:outline-none focus:ring-1 focus:ring-[#8B4513]"
                         />
                       </div>
 
                       <div>
                         <label className="block text-[11px] font-bold uppercase tracking-wider text-gray-500 mb-1">
-                          Delivery Notes / Special Requests (Optional)
+                          Special Notes / Packaging Requirements (Optional)
                         </label>
                         <textarea
                           rows={2}
                           value={deliveryNotes}
                           onChange={(e) => setDeliveryNotes(e.target.value)}
-                          placeholder="e.g. Gift packaging / deliver during business hours"
+                          placeholder={market === 'intl' ? 'e.g. Phytosanitary certificate / wooden pallet packaging' : 'e.g. Gift packaging / deliver during business hours'}
                           className="w-full text-xs p-2.5 rounded-lg border border-gray-200 focus:outline-none focus:ring-1 focus:ring-[#8B4513]"
                         />
                       </div>
@@ -409,19 +527,29 @@ const Cart: React.FC<CartProps> = ({
               <div className="flex items-start gap-2 p-3 rounded-xl bg-[#FAF9F6] border border-[#8B4513]/10 text-[11px] text-gray-600 leading-relaxed">
                 <FileText size={15} className="text-[#8B4513] flex-shrink-0 mt-0.5" />
                 <span>
-                  <strong>Order Request Notice:</strong> Submitting prepares a structured order message on WhatsApp. Our business team will verify fresh harvest availability and confirm exact courier fees for your delivery city before final processing.
+                  {market === 'intl' ? (
+                    <>
+                      <strong>International Export Notice:</strong> Submitting sends an export order request via WhatsApp. International air/sea freight rates (DHL/FedEx/EMS) and customs documentation will be calculated and confirmed for your destination country before processing.
+                    </>
+                  ) : (
+                    <>
+                      <strong>Order Request Notice:</strong> Submitting prepares a structured order message on WhatsApp. Our business team will verify fresh harvest availability and confirm exact courier fees for your delivery city before final processing.
+                    </>
+                  )}
                 </span>
               </div>
 
               {/* Total breakdown */}
               <div className="space-y-1 pt-1">
                 <div className="flex justify-between text-xs text-gray-500">
-                  <span>Subtotal ({totalItemCount} items)</span>
-                  <span>{formatPrice(subtotal)}</span>
+                  <span>
+                    Subtotal ({totalItemCount} {totalItemCount === 1 ? 'item' : 'items'})
+                  </span>
+                  <span>{formatPrice(subtotal, market)}</span>
                 </div>
                 <div className="flex justify-between text-base font-bold text-[#4A3728]">
                   <span>Estimated Total</span>
-                  <span className="text-[#8B4513] text-lg">{formatPrice(subtotal)}</span>
+                  <span className="text-[#8B4513] text-lg">{formatPrice(subtotal, market)}</span>
                 </div>
               </div>
 
@@ -429,16 +557,20 @@ const Cart: React.FC<CartProps> = ({
               <div className="space-y-2 pt-1">
                 <button
                   type="button"
-                  disabled={hasOutOfStockItem}
+                  disabled={isCheckoutDisabled}
                   onClick={handleStructuredCheckout}
                   className={`w-full flex items-center justify-center gap-2 py-3.5 px-4 rounded-xl font-bold shadow-lg transition-all focus:outline-none ${
-                    hasOutOfStockItem
+                    isCheckoutDisabled
                       ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
                       : 'bg-[#25D366] hover:bg-[#20ba59] text-white shadow-emerald-700/20 hover:shadow-xl focus:ring-4 focus:ring-emerald-300'
                   }`}
                 >
                   <MessageCircle size={18} />
-                  <span>Send Order Request on WhatsApp</span>
+                  <span>
+                    {market === 'intl'
+                      ? 'Send Export Request on WhatsApp'
+                      : 'Send Order Request on WhatsApp'}
+                  </span>
                 </button>
 
                 <button

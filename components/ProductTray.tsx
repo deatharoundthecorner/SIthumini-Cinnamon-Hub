@@ -1,10 +1,11 @@
 import React, { useRef, useState } from 'react';
-import { Product } from '../types';
-import { ChevronLeft, ChevronRight, Plus, Eye, Sparkles, Leaf } from 'lucide-react';
+import { Product, Market } from '../types';
+import { ChevronLeft, ChevronRight, Plus, Eye, Sparkles, Leaf, MessageCircle } from 'lucide-react';
 import { getNumericPrice, formatPrice } from './Cart';
 
 interface ProductTrayProps {
   products: Product[];
+  market?: Market;
   onAddToCart: (product: Product) => void;
   onOpenModal: (product: Product) => void;
 }
@@ -38,6 +39,7 @@ const COLLECTIONS: CollectionConfig[] = [
 
 const ProductTray: React.FC<ProductTrayProps> = ({
   products,
+  market = 'lk',
   onAddToCart,
   onOpenModal,
 }) => {
@@ -55,6 +57,14 @@ const ProductTray: React.FC<ProductTrayProps> = ({
       const scrollAmount = direction === 'left' ? -340 : 340;
       scrollRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
     }
+  };
+
+  const openWhatsAppQuote = (productName: string) => {
+    if (typeof window === 'undefined') return;
+    const message = encodeURIComponent(
+      `Hello Sithumini Cinnamon Hub! I am an international buyer inquiring about export pricing, bulk quantities, and overseas freight for "${productName}". Could you provide export rates?`
+    );
+    window.open(`https://wa.me/94785197533?text=${message}`, '_blank');
   };
 
   if (trayProducts.length === 0) return null;
@@ -126,7 +136,9 @@ const ProductTray: React.FC<ProductTrayProps> = ({
         {trayProducts.map((product) => {
           const isOutOfStock = product.stock === 0;
           const hasExplicitStock = typeof product.stock === 'number';
-          const numericPrice = getNumericPrice(product);
+          const numericPrice = getNumericPrice(product, market);
+          const isConfigured = numericPrice !== null && numericPrice > 0;
+          const isIntlUnpriced = market === 'intl' && !isConfigured;
 
           return (
             <article
@@ -198,13 +210,19 @@ const ProductTray: React.FC<ProductTrayProps> = ({
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between gap-2">
-                  <div>
-                    <span className="text-base font-bold text-[#4A3728]">
-                      {formatPrice(numericPrice)}
-                    </span>
+                  <div className="min-w-0 flex-1">
+                    {isIntlUnpriced ? (
+                      <span className="inline-block text-[11px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200/80">
+                        Request export pricing
+                      </span>
+                    ) : (
+                      <span className="text-base font-bold text-[#4A3728]">
+                        {formatPrice(numericPrice, market)}
+                      </span>
+                    )}
                   </div>
 
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
                     <button
                       type="button"
                       onClick={() => onOpenModal(product)}
@@ -213,19 +231,31 @@ const ProductTray: React.FC<ProductTrayProps> = ({
                       Details
                     </button>
 
-                    <button
-                      type="button"
-                      disabled={isOutOfStock}
-                      onClick={() => onAddToCart(product)}
-                      className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm ${
-                        isOutOfStock
-                          ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
-                          : 'bg-[#8B4513] hover:bg-[#6D360F] text-white active:scale-95'
-                      }`}
-                    >
-                      <Plus size={13} />
-                      <span>{isOutOfStock ? 'Sold Out' : 'Add'}</span>
-                    </button>
+                    {isIntlUnpriced ? (
+                      <button
+                        type="button"
+                        onClick={() => openWhatsAppQuote(product.name)}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-700 hover:bg-amber-800 text-white transition-all shadow-sm active:scale-95"
+                        title="Request export pricing on WhatsApp"
+                      >
+                        <MessageCircle size={13} />
+                        <span>Quote</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={isOutOfStock}
+                        onClick={() => onAddToCart(product)}
+                        className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all shadow-sm ${
+                          isOutOfStock
+                            ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
+                            : 'bg-[#8B4513] hover:bg-[#6D360F] text-white active:scale-95'
+                        }`}
+                      >
+                        <Plus size={13} />
+                        <span>{isOutOfStock ? 'Sold Out' : 'Add'}</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
